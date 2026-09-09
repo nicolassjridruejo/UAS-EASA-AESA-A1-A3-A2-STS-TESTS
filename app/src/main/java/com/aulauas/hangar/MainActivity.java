@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Base64;
@@ -19,6 +20,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.view.WindowInsets;
 import android.widget.Toast;
 
 import java.io.IOException;
@@ -38,6 +40,28 @@ public class MainActivity extends Activity {
         getWindow().setNavigationBarColor(Color.rgb(8, 13, 18));
         webView = new WebView(this);
         webView.setBackgroundColor(Color.rgb(8, 13, 18));
+        webView.setOnApplyWindowInsetsListener((view, insets) -> {
+            int left;
+            int top;
+            int right;
+            int bottom;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.graphics.Insets bars = insets.getInsets(
+                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+                );
+                left = bars.left;
+                top = bars.top;
+                right = bars.right;
+                bottom = bars.bottom;
+            } else {
+                left = insets.getSystemWindowInsetLeft();
+                top = insets.getSystemWindowInsetTop();
+                right = insets.getSystemWindowInsetRight();
+                bottom = insets.getSystemWindowInsetBottom();
+            }
+            view.setPadding(left, top, right, bottom);
+            return insets;
+        });
         setContentView(webView);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -58,12 +82,14 @@ public class MainActivity extends Activity {
                 Uri uri = request.getUrl();
                 if ("app.local".equals(uri.getHost())) {
                     String path = uri.getPath();
-                    if (path == null || "/".equals(path) || "/index.html".equals(path)) {
-                        try {
-                            InputStream in = getAssets().open("index.html");
-                            return new WebResourceResponse("text/html", "UTF-8", in);
-                        } catch (IOException ignored) { return null; }
-                    }
+                    String assetPath = path == null || "/".equals(path) ? "index.html" : path.replaceFirst("^/+", "");
+                    if (assetPath.contains("..")) return null;
+                    try {
+                        InputStream in = getAssets().open(assetPath);
+                        String mime = guessMime(assetPath);
+                        String encoding = mime.startsWith("text/") || "application/javascript".equals(mime) ? "UTF-8" : null;
+                        return new WebResourceResponse(mime, encoding, in);
+                    } catch (IOException ignored) { return null; }
                 }
                 return null;
             }
@@ -190,6 +216,7 @@ public class MainActivity extends Activity {
         int dot = filename.lastIndexOf('.');
         if (dot >= 0 && dot < filename.length() - 1) {
             String ext = filename.substring(dot + 1).toLowerCase();
+            if ("webp".equals(ext)) return "image/webp";
             String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext);
             if (mime != null) return mime;
         }

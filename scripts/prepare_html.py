@@ -19,6 +19,11 @@ PDFS = {
     "rtf6": "https://www.seguridadaerea.gob.es/sites/default/files/for-uas-p01-dt15_ed_02_curso_de_radiofonista_rtf_uas_aesa_cap_6.pdf",
     "rtf7": "https://www.seguridadaerea.gob.es/sites/default/files/for-uas-p01-dt22_ed_01_curso_de_radiofonista_rtf_uas_aesa_cap_7.pdf",
 }
+RENDERS = {
+    "quad": "renders/multirotor.webp",
+    "vtol": "renders/vtol.webp",
+    "radio": "renders/radio.webp",
+}
 
 def download(url):
     req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0 Aula-UAS-GitHub-Builder/1.0","Accept":"application/pdf,*/*;q=0.8"})
@@ -32,6 +37,12 @@ def main():
     if not SOURCE.exists():
         raise RuntimeError("Falta index.source.xz.b64 en la raíz del repositorio")
     html = lzma.decompress(base64.b64decode(SOURCE.read_text(encoding="ascii"))).decode("utf-8")
+    if 'const ARTWORK={quad:"/renders/multirotor.webp",vtol:"/renders/vtol.webp",radio:"/renders/radio.webp"};' not in html:
+        raise RuntimeError("El HTML fuente no contiene las rutas de los tres renders")
+    for render_id, asset_path in RENDERS.items():
+        render = ROOT / "app/src/main/assets" / asset_path
+        if not render.exists() or render.stat().st_size < 10_000:
+            raise RuntimeError(f"Falta el render {render_id}: {asset_path}")
     embeds = []
     for pdf_id, url in PDFS.items():
         print(f"Descargando {pdf_id}...")

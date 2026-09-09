@@ -11,4 +11,4 @@ Aplicación Android de Aula UAS (A1/A3, A2, STS y Radiofonista UAS).
 5. Cuando termine, abre la ejecución y descarga el artefacto **Aula-UAS-APK**.
 6. Dentro encontrarás `Aula-UAS-debug.apk`.
 
-El workflow reconstruye `index.html`, descarga los manuales oficiales de AESA y los incrusta antes de compilar para que el APK pueda funcionar sin conexión.
+El workflow reconstruye `index.html`, incorpora los tres renders desde `app/src/main/assets/renders`, descarga los manuales oficiales de AESA y los incrusta antes de compilar para que el APK pueda funcionar sin conexión.
