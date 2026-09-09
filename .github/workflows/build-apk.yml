@@ -52,12 +52,15 @@ jobs:
         run: |
           APK="app/build/outputs/apk/debug/app-debug.apk"
           unzip -t "$APK"
-          for path in assets/index.html assets/renders/multirotor.webp assets/renders/vtol.webp assets/renders/radio.webp assets/assistant/uas-assistant.js assets/assistant/uas-assistant-adapter.js assets/assistant/uas-assistant.css assets/assistant/assets/idle.webp assets/assistant/assets/scan.webp assets/assistant/assets/explain.webp assets/assistant/assets/celebrate.webp; do
+          for path in assets/index.html assets/renders/multirotor.webp assets/renders/vtol.webp assets/renders/radio.webp assets/assistant/uas-assistant.js assets/assistant/uas-assistant-adapter.js assets/assistant/uas-assistant.css assets/assistant/dragonfly-v02-visual.js assets/assistant/assets/idle.webp assets/assistant/assets/scan.webp assets/assistant/assets/explain.webp assets/assistant/assets/celebrate.webp; do
             unzip -Z1 "$APK" | grep -Fx "$path"
           done
           unzip -p "$APK" assets/index.html | grep -Fq 'Ver fuente, ubicación y pasaje'
           unzip -p "$APK" assets/index.html | grep -Fq 'aula_uas_progress_v4'
           unzip -p "$APK" assets/index.html | grep -Fq 'window.UAS_ASSISTANT_BOOTSTRAP='
+          unzip -p "$APK" assets/index.html | grep -Fq '/assistant/dragonfly-v02-visual.js'
+          unzip -p "$APK" assets/assistant/uas-assistant-adapter.js | grep -Fq "V='0.2.0'"
+          "$ANDROID_SDK_ROOT/build-tools/35.0.0/aapt" dump badging "$APK" | grep -Fq "versionCode='8' versionName='8.0'"
       - name: Prepare download
         shell: bash
         run: |
@@ -93,9 +96,19 @@ jobs:
             git commit -m "Update downloadable APK"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-      - name: Preserve current public APK when signing is unavailable
+      - name: Publish Dragonfly v0.2 debug APK in repository (one-time refresh)
         if: env.HAS_RELEASE_SIGNING != 'true'
-        run: echo "Debug validation completed. Aula-UAS.apk was not replaced because persistent release-signing secrets are not configured."
+        shell: bash
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Aula-UAS.apk
+          sha256sum Aula-UAS.apk > Aula-UAS.apk.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Aula-UAS.apk Aula-UAS.apk.sha256
+          if ! git diff --cached --quiet; then
+            git commit -m "Publish Aula UAS 8.0 with Dragonfly v0.2"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
