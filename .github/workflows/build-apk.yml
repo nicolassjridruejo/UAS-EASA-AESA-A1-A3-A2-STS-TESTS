@@ -13,7 +13,7 @@ on:
       - '.github/workflows/build-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -49,6 +49,18 @@ jobs:
           mkdir -p output
           cp app/build/outputs/apk/debug/app-debug.apk output/Aula-UAS-debug.apk
           sha256sum output/Aula-UAS-debug.apk > output/Aula-UAS-debug.apk.sha256
+      - name: Publish current APK in repository
+        shell: bash
+        run: |
+          cp output/Aula-UAS-debug.apk Aula-UAS.apk
+          sha256sum Aula-UAS.apk > Aula-UAS.apk.sha256
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add Aula-UAS.apk Aula-UAS.apk.sha256
+          if ! git diff --cached --quiet; then
+            git commit -m "Update downloadable APK"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
