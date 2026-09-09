@@ -1,73 +1,48 @@
 /*
- * Aula UAS integration adapter for UAS Dragonfly Assistant v0.1.
- * The trainer supplies window.UAS_ASSISTANT_BOOTSTRAP with topics, documents
- * and getSnapshot. This file adds no network calls or external dependencies.
+ * Aula UAS · Dragonfly v0.2 Lite
+ * Local intent model + memory + safe study actions. No network, no LLM.
  */
-(function () {
-  'use strict';
-  if (!window.UASAssistant || window.UASAssistant.instance) return;
-
-  const options = window.UAS_ASSISTANT_BOOTSTRAP || {};
-  const assistant = window.UASAssistant.init(options);
-
-  function normal(value) {
-    return String(value || '').toLocaleLowerCase('es').normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9ñü\s/-]/g, ' ')
-      .replace(/\s+/g, ' ').trim();
-  }
-
-  // Imports cumulative app statistics only when the assistant has not already
-  // received those answers through its live uas:answer event contract.
-  function syncProgress(snapshot) {
-    const answers = Array.isArray(snapshot && snapshot.answers) ? snapshot.answers : [];
-    if (!answers.length || !assistant || !assistant.state) return 0;
-    let imported = 0;
-    const notify = assistant.notify;
-    const animate = assistant.animate;
-    const renderSummary = assistant.renderSummary;
-    assistant.notify = function () {};
-    assistant.animate = function () {};
-    assistant.renderSummary = function () {};
-    try {
-      for (const row of answers) {
-        if (!row || row.questionId == null || !row.course || !row.topic) continue;
-        const saved = assistant.state.questions[`${normal(row.course)}::${String(row.questionId)}`] || {};
-        const haveCorrect = Number(saved.correct) || 0;
-        const haveWrong = Number(saved.wrong) || 0;
-        const wantCorrect = Math.max(0, Number(row.correct) || 0);
-        const wantWrong = Math.max(0, Number(row.wrong) || 0);
-        for (let i = haveCorrect; i < wantCorrect; i += 1) {
-          assistant.recordAnswer({ course: row.course, topic: row.topic, questionId: row.questionId, correct: true, quality: 4 });
-          imported += 1;
-        }
-        for (let i = haveWrong; i < wantWrong; i += 1) {
-          assistant.recordAnswer({ course: row.course, topic: row.topic, questionId: row.questionId, correct: false, quality: 2 });
-          imported += 1;
-        }
-      }
-    } finally {
-      assistant.notify = notify;
-      assistant.animate = animate;
-      assistant.renderSummary = renderSummary;
-      assistant.renderSummary();
-      assistant.persistSoon();
-    }
-    return imported;
-  }
-
-  function restoreProgress(saved) {
-    if (!saved || typeof saved !== 'object' || !saved.topics || !saved.questions) return false;
-    assistant.state = saved;
-    assistant.persistSoon();
-    assistant.renderSummary();
-    return true;
-  }
-
-  window.UAS_ASSISTANT_SYNC_PROGRESS = syncProgress;
-  window.UAS_ASSISTANT_EXPORT_PROGRESS = function () { return assistant.state; };
-  window.UAS_ASSISTANT_RESTORE_PROGRESS = restoreProgress;
-  window.__uasAssistant = assistant;
-  if (typeof options.getSnapshot === 'function') {
-    try { syncProgress(options.getSnapshot()); } catch (_) { /* legacy progress remains usable */ }
-  }
+(()=>{'use strict';
+if(!window.UASAssistant||window.UASAssistant.instance)return;
+const O=window.UAS_ASSISTANT_BOOTSTRAP||{},A=window.UASAssistant.init(O),V='0.2.0';
+const C=["adaptive_quiz","course_progress","errors","explain_question","help","next","open_topic","progress","ready","review","review_errors","search_syllabus","show_source","start_quiz","streak","weak"],D=128,S=[0.0163207167,0.0193625419,0.0159361689,0.03066616,0.0235629142,0.0183009736,0.0212918758,0.0222659372,0.0202075535,0.0174794658,0.0203527286,0.0159032523,0.0212395142,0.0224313613,0.0175777664,0.0246710837],B=[-0.1939507598,-0.1361104301,-0.2458961427,-0.7422539819,0.0447440195,0.2445239274,0.0943602432,0.4778713638,-0.0053559848,-0.2322937472,-0.1804050849,0.3378426929,0.1423109329,0.1324034765,0.1140436643,0.1481658107],Z='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';
+const raw=atob(Z),W=new Int8Array(raw.length);for(let i=0;i<raw.length;i++)W[i]=raw.charCodeAt(i)>127?raw.charCodeAt(i)-256:raw.charCodeAt(i);
+const N=s=>String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s/-]/g,' ').replace(/\s+/g,' ').trim();
+function H(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)>>>0;}return h}
+function X(s){const x=new Float32Array(D);for(const q of N(s).split(' ').filter(Boolean)){const w=' '+q+' ';for(let k=3;k<6;k++)for(let i=0;i+k<=w.length;i++){const h=H(w.slice(i,i+k));x[h%D]+=((h>>>31)&1)?-1:1}}let n=0;for(const v of x)n+=v*v;n=Math.sqrt(n)||1;for(let i=0;i<D;i++)x[i]/=n;return x}
+function ML(s){const x=X(s),l=[];let mx=-1e9;for(let c=0;c<C.length;c++){let z=B[c],o=c*D;for(let i=0;i<D;i++)if(x[i])z+=W[o+i]*S[c]*x[i];l[c]=z;mx=Math.max(mx,z)}let sum=0,b=0,bp=0;for(let i=0;i<l.length;i++){l[i]=Math.exp(l[i]-mx);sum+=l[i]}for(let i=0;i<l.length;i++){l[i]/=sum;if(l[i]>bp){bp=l[i];b=i}}return{intent:C[b],confidence:bp}}
+const nums={uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,once:11,doce:12,quince:15,veinte:20};
+function E(s){const n=N(s),e={};if(/a1\s*[/-]?\s*a3|a1 a3/.test(n))e.course='A1/A3';else if(/\ba2\b/.test(n))e.course='A2';else if(/\bsts(?:-?01|-?02)?\b/.test(n))e.course='STS';else if(/radiofon|\brtf\b/.test(n))e.course='Radiofonista';
+let m=n.match(/\b([1-9]|[1-7][0-9]|80)\s*(?:preguntas?|cuestiones?)?\b/);if(m)e.count=+m[1];if(e.count==null)for(const [k,v]of Object.entries(nums))if(new RegExp('\\b'+k+'\\b').test(n)){e.count=v;break}
+m=n.match(/\b(\d{1,2})\s*(?:min|minutos?)\b/);if(m)e.minutes=Math.max(1,Math.min(60,+m[1]));
+const ts=[...new Set(Object.values(A.state.registeredTopics||{}).map(t=>t.topic).filter(Boolean))].sort((a,b)=>N(b).length-N(a).length);for(const t of ts)if(N(t).length>2&&n.includes(N(t))){e.topic=t;break}return e}
+function R(s,e){const n=N(s);if(/fuente|de donde|procedencia|origen/.test(n))return{intent:'show_source',confidence:.99};if(/explica|explicame|por que.*respuesta|por que.*fall/.test(n))return{intent:'explain_question',confidence:.98};if(/repet.*fall|solo.*fall|errores.*test|fallos.*test/.test(n))return{intent:'review_errors',confidence:.99};if(/simulacro|examen/.test(n)&&/(haz|pon|empieza|inicia|quiero)/.test(n))return{intent:'start_quiz',confidence:.99};if(/adaptativ|lo que peor|puntos debiles.*test|errores.*repas/.test(n))return{intent:'adaptive_quiz',confidence:.98};if(/(?:pon|haz|quiero|empieza|inicia).*(?:pregunta|test)/.test(n))return{intent:'start_quiz',confidence:.97};if(/abre|llevame|ir a/.test(n)&&e.topic)return{intent:'open_topic',confidence:.97};if(/estoy (?:listo|lista|preparad)|puedo examinar/.test(n))return{intent:'ready',confidence:.98};if(/que estudio|que hago|recomiend|por donde sigo/.test(n))return{intent:'next',confidence:.97};if(/como voy|progreso|avance|cuanto llevo/.test(n))return{intent:e.course?'course_progress':'progress',confidence:.98};if(/racha|dias seguidos/.test(n))return{intent:'streak',confidence:.96};if(/repasar|repaso|que toca|pendiente|vencid/.test(n))return{intent:'review',confidence:.94};if(/fallos?|errores?|debil|peor tema/.test(n))return{intent:/errores?/.test(n)?'errors':'weak',confidence:.92};return null}
+function P(s){const e=E(s),r=R(s,e)||ML(s);return{...r,entities:e}}
+function M(){A.state.version=2;A.state.engineVersion=V;A.state.preferences=A.state.preferences||{};if(A.state.preferences.preferredQuizLength==null)A.state.preferences.preferredQuizLength=10;A.state.assistantMemory=A.state.assistantMemory||{intentCounts:{},actionHistory:[],lastSource:null};A.state.assistantMemory.intentCounts=A.state.assistantMemory.intentCounts||{};A.state.assistantMemory.actionHistory=Array.isArray(A.state.assistantMemory.actionHistory)?A.state.assistantMemory.actionHistory:[];A.config.maxConversationTurns=16;A.config.autoExecuteToolConfidence=.50;const x=A.ui?.root?.querySelector('.uasd-subtitle');if(x)x.textContent='local · IA ligera · sin conexión'}
+function cid(v){const n=N(v);if(/a1.*a3|a3.*a1/.test(n))return'a1';if(/\ba2\b/.test(n))return'a2';if(/\bsts/.test(n))return'sts';if(/radio|rtf/.test(n))return'radio';return null}
+function course(v){const id=cid(v);if(!id)return null;const b=document.querySelector(`[data-act="course"][data-id="${id}"]`);if(b&&!b.classList.contains('active'))b.click();return id}
+function tid(v,c){if(!v)return null;const n=N(v),a=(O.topics||[]).filter(t=>!c||N(t.course)===N(c));let h=a.find(t=>N(t.topic)===n)||a.find(t=>N(t.topic).includes(n)||n.includes(N(t.topic)));if(!h){const ws=n.split(/\s+/).filter(x=>x.length>2);let bs=0;for(const t of a){const z=N(t.topic),s=ws.reduce((q,w)=>q+(z.includes(w)?1:0),0);if(s>bs){h=t;bs=s}}}return h?.anchor?String(h.anchor):null}
+const nav=id=>{const b=document.querySelector(`[data-act="nav"][data-id="${id}"]`);if(b){b.click();return true}return false};
+function sel(id,v){const e=document.getElementById(id);if(!e)return false;v=String(v??'');if(![...e.options].some(o=>o.value===v))e.add(new Option(v,v));e.value=v;e.dispatchEvent(new Event('change',{bubbles:true}));return true}
+function ACT(call){const p=call?.payload||{},cc=course(p.course),t=tid(p.topic,p.course);try{if(['start_quiz','start_adaptive_quiz','review_errors'].includes(call.type)){nav('practice');if(call.type==='start_quiz'&&p.mode==='exam'){const b=document.querySelector('[data-act="exam"]');if(b){b.click();return{accepted:true,mode:'exam'}}}const mode=call.type==='review_errors'?'wrong':'adaptive',count=Math.max(1,Math.min(80,Math.round(+p.minutes||+p.count||10)));sel('practiceMode',mode);sel('practiceCount',count);if(t){const a=document.getElementById('practiceAll');if(a&&!a.checked){a.checked=true;a.dispatchEvent(new Event('change',{bubbles:true}))}sel('practiceTopic',t)}const b=document.querySelector('[data-act="start"]');if(b){b.click();return{accepted:true,mode,count,topic:t,course:cc}}}
+if(call.type==='open_topic'){nav('theory');const x=t&&document.getElementById('lesson-'+t);if(x){x.open=true;x.scrollIntoView({behavior:'smooth',block:'start'});return{accepted:true,topic:t}}}
+if(call.type==='explain_current_question'){const b=document.querySelector('[data-act="evidence"][data-id]');if(b){b.click();return{accepted:true,questionId:b.dataset.id}}}
+if(call.type==='show_source'){const id=p.id||p.anchor;if(id){nav('theory');const x=document.getElementById('lesson-'+id);if(x){x.open=true;x.scrollIntoView({behavior:'smooth',block:'start'});return{accepted:true,topic:id}}}const b=document.querySelector('[data-act="evidence"][data-id]');if(b){b.click();return{accepted:true,questionId:b.dataset.id}}}}catch(e){return{accepted:false,reason:String(e.message||e)}}return{accepted:false}}
+function action(type,p){const x={type,payload:p,source:'dragonfly',ts:Date.now()},m=A.state.assistantMemory;m.actionHistory.push(x);m.actionHistory=m.actionHistory.slice(-30);if(p?.count)A.state.preferences.preferredQuizLength=p.count;A.persistSoon();return(typeof O.onAction==='function'?O.onAction:ACT)(x)}
+function ans(i,q,e){const c=e.course||A.state.currentCourse;if(['progress','next','weak','errors','review','ready','help'].includes(i)&&!e.course)return A.answerIntent(i,q);
+if(i==='course_progress'){const p=A.getProgress(c);return{text:p.attempts?`${c||'Curso'}: ${p.attempts} respuestas, ${Math.round(p.accuracy*100)} % de acierto, cobertura ${Math.round(p.coverage*100)} % y dominio conservador ${Math.round(p.mastery*100)} %.`:`Aún no tengo suficientes datos de ${c||'ese curso'}.`,animation:'scan',meta:p}}
+if(i==='streak'){const r=A.getTopicRows(c).sort((a,b)=>b.streakCorrect-a.streakCorrect)[0],d=new Set((A.state.events||[]).map(x=>new Date(x.ts).toISOString().slice(0,10))).size;return{text:`He registrado actividad en ${d} día${d===1?'':'s'}.${r?.streakCorrect?` Tu mejor racha activa es ${r.streakCorrect} aciertos en ${r.topic}.`:''}`,animation:'celebrate'}}
+if(i==='start_quiz'){const p={course:c||null,topic:e.topic||null,count:e.count||A.state.preferences.preferredQuizLength||10,mode:/simulacro|examen/.test(N(q))?'exam':'practice'};return{text:`Preparo ${p.mode==='exam'?'un simulacro':p.count+' preguntas'}${p.topic?' de '+p.topic:''}.`,animation:'explain',toolCall:{type:'start_quiz',payload:p}}}
+if(i==='adaptive_quiz'){const r=A.recommendNext(c),p={course:c||null,topic:e.topic||r?.topic||null,count:e.count||A.state.preferences.preferredQuizLength||10,minutes:e.minutes||null};return{text:`Voy a priorizar ${p.topic?'«'+p.topic+'» y ':''}tus errores y repasos pendientes${p.minutes?' durante unos '+p.minutes+' min':''}.`,animation:'scan',toolCall:{type:'start_adaptive_quiz',payload:p}}}
+if(i==='review_errors'){const p={course:c||null,topic:e.topic||null,count:e.count||null};return{text:'Te preparo un repaso centrado únicamente en preguntas que has fallado.',animation:'scan',toolCall:{type:'review_errors',payload:p}}}
+if(i==='open_topic'){const p={course:c||null,topic:e.topic||A.state.currentTopic||null};return{text:p.topic?`Abro «${p.topic}».`:'Dime qué materia quieres abrir.',animation:'explain',toolCall:p.topic?{type:'open_topic',payload:p}:null}}
+if(i==='explain_question')return{text:'Voy a abrir la explicación y la evidencia de la pregunta actual.',animation:'explain',toolCall:{type:'explain_current_question',payload:{course:c||null}}};
+if(i==='show_source'){const s=A.state.assistantMemory.lastSource;return s?{text:`La última respuesta procede de «${s.title||'la fuente local'}».`,animation:'explain',toolCall:{type:'show_source',payload:s}}:{text:'Todavía no tengo una fuente asociada. Pregúntame primero por un contenido del temario.',animation:'explain'}}
+const f=A.search.search(q,3);if(f.length){const t=f[0],z=String(t.text||'').replace(/\s+/g,' ').trim().slice(0,260);A.state.assistantMemory.lastSource={id:t.id||null,title:t.title||null,anchor:t.anchor||null,source:t.source||null};return{text:`He encontrado esto en el temario local: «${t.title||'Tema'}». ${z}${z.length>=260?'…':''}`,animation:'explain',meta:{results:f}}}
+return{text:'No encuentro una respuesta fiable en el contenido local. Sí puedo ayudarte con progreso, errores, repasos y planificación.',animation:'explain'}}
+A.ask=function(text,o={}){const q=String(text||'').trim();if(!q)return{intent:'none',text:''};const z=P(q),i=z.intent,e=z.entities;A.state.assistantMemory.intentCounts[i]=(A.state.assistantMemory.intentCounts[i]||0)+1;const a=ans(i,q,e);if(a.toolCall&&z.confidence>=A.config.autoExecuteToolConfidence)a.toolResult=action(a.toolCall.type,a.toolCall.payload||{});A.rememberConversation(q,a.text,i,{confidence:z.confidence,entities:e,toolCall:a.toolCall||null});if(o.render&&A.ui){A.addChat('user',q);A.addChat('assistant',a.text,a.actions);A.animate(a.animation||'explain',['progress','course_progress','weak','errors','review','ready','adaptive_quiz'].includes(i)?'thinking':'explain',1700)}return{intent:i,confidence:z.confidence,entities:e,...a}};
+const oldClear=A.clearMemory.bind(A);A.clearMemory=()=>{oldClear();M();A.persistSoon();A.renderSummary()};window.UASAssistant.ask=(q,o)=>A.ask(q,o);window.UASAssistant.clearMemory=()=>A.clearMemory();window.UASAssistant.exportMemory=()=>JSON.parse(JSON.stringify(A.state));
+const oldImport=A.importMemory.bind(A);A.importMemory=d=>{if(!d||typeof d!=='object')throw Error('Formato de memoria no compatible');A.state=d;M();A.persistSoon();A.renderSummary()};window.UASAssistant.importMemory=d=>A.importMemory(d);
+function sync(s){const rows=Array.isArray(s?.answers)?s.answers:[];if(!rows.length)return 0;let n=0,notify=A.notify,animate=A.animate,render=A.renderSummary;A.notify=()=>{};A.animate=()=>{};A.renderSummary=()=>{};try{for(const r of rows){if(!r?.questionId||!r.course||!r.topic)continue;const k=N(r.course)+'::'+r.questionId,x=A.state.questions[k]||{},hc=+x.correct||0,hw=+x.wrong||0;for(let i=hc;i<(+r.correct||0);i++){A.recordAnswer({course:r.course,topic:r.topic,questionId:r.questionId,correct:true,quality:4});n++}for(let i=hw;i<(+r.wrong||0);i++){A.recordAnswer({course:r.course,topic:r.topic,questionId:r.questionId,correct:false,quality:2});n++}}}finally{A.notify=notify;A.animate=animate;A.renderSummary=render;A.renderSummary();A.persistSoon()}return n}
+M();A.callbacks.onAction=O.onAction||ACT;window.UAS_ASSISTANT_SYNC_PROGRESS=sync;window.UAS_ASSISTANT_EXPORT_PROGRESS=()=>A.state;window.UAS_ASSISTANT_RESTORE_PROGRESS=d=>{try{A.importMemory(d);return true}catch(_e){return false}};window.__uasAssistant=A;window.__dragonflyV02={version:V,classify:P};if(typeof O.getSnapshot==='function')try{sync(O.getSnapshot())}catch(_e){}
 })();
