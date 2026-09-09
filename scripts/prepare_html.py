@@ -40,6 +40,7 @@ def main():
     if "</body>" not in html:
         raise RuntimeError("HTML fuente no contiene </body>")
     html = html.replace("</body>", "\n".join(embeds) + "\n</body>", 1)
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(html, encoding="utf-8")
     print(f"Generado: {OUTPUT} ({OUTPUT.stat().st_size / 1024 / 1024:.1f} MiB)")
 
