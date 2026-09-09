@@ -28,6 +28,7 @@ RENDERS = {
     "radio": "renders/radio.webp",
 }
 
+
 def download(url):
     req = urllib.request.Request(url, headers={"User-Agent":"Mozilla/5.0 Aula-UAS-GitHub-Builder/1.0","Accept":"application/pdf,*/*;q=0.8"})
     with urllib.request.urlopen(req, timeout=120) as response:
@@ -35,6 +36,7 @@ def download(url):
     if not data.startswith(b"%PDF"):
         raise RuntimeError(f"La descarga no parece un PDF: {url}")
     return data
+
 
 def main():
     if not SOURCE.exists():
@@ -58,6 +60,7 @@ def main():
         "assistant/uas-assistant.js",
         "assistant/uas-assistant-adapter.js",
         "assistant/uas-assistant.css",
+        "assistant/dragonfly-v02-visual.js",
         "assistant/assets/idle.webp",
         "assistant/assets/scan.webp",
         "assistant/assets/explain.webp",
@@ -88,10 +91,12 @@ def main():
     html = html[:start] + json.dumps(manuals, ensure_ascii=False, separators=(",", ":")) + html[end:]
     if "</body>" not in html:
         raise RuntimeError("HTML fuente no contiene </body>")
-    html = html.replace("</body>", "\n".join(embeds) + "\n</body>", 1)
+    visual_tag = '<script src="/assistant/dragonfly-v02-visual.js"></script>'
+    html = html.replace("</body>", "\n".join(embeds) + "\n" + visual_tag + "\n</body>", 1)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT.write_text(html, encoding="utf-8")
     print(f"Generado: {OUTPUT} ({OUTPUT.stat().st_size / 1024 / 1024:.1f} MiB)")
+
 
 if __name__ == "__main__":
     main()
