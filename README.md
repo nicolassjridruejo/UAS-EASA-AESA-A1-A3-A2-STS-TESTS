@@ -6,6 +6,8 @@ Aplicación Android de Aula UAS (A1/A3, A2, STS y Radiofonista UAS).
 
 [**Descargar Aula UAS para Android (.apk)**](https://github.com/nicolassjridruejo/UAS-EASA-AESA-A1-A3-A2-STS-TESTS/raw/refs/heads/ChatGPT-Connector/Aula-UAS.apk)
 
+**Versión pública actual:** Aula UAS 8.0 · Dragonfly v0.2 Lite.
+
 Descarga el archivo en tu teléfono, ábrelo e instala la aplicación. Android puede pedir permiso para instalar aplicaciones desde el navegador o el gestor de archivos usado.
 
 ## Generar el APK desde GitHub
