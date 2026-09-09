@@ -20,6 +20,8 @@ jobs:
     name: Compile debug APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      HAS_RELEASE_SIGNING: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
@@ -40,19 +42,49 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null || true
           "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
       - name: Rebuild offline HTML with AESA manuals
-        run: python3 scripts/prepare_html.py
+        run: |
+          python3 -m pip install --disable-pip-version-check pypdf==6.10.0
+          python3 scripts/prepare_html.py
       - name: Build APK
         run: gradle --no-daemon :app:assembleDebug
+      - name: Verify packaged application
+        shell: bash
+        run: |
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          unzip -t "$APK"
+          for path in assets/index.html assets/renders/multirotor.webp assets/renders/vtol.webp assets/renders/radio.webp assets/assistant/uas-assistant.js assets/assistant/uas-assistant-adapter.js assets/assistant/uas-assistant.css assets/assistant/assets/idle.webp assets/assistant/assets/scan.webp assets/assistant/assets/explain.webp assets/assistant/assets/celebrate.webp; do
+            unzip -Z1 "$APK" | grep -Fx "$path"
+          done
+          unzip -p "$APK" assets/index.html | grep -Fq 'Ver fuente, ubicación y pasaje'
+          unzip -p "$APK" assets/index.html | grep -Fq 'aula_uas_progress_v4'
+          unzip -p "$APK" assets/index.html | grep -Fq 'window.UAS_ASSISTANT_BOOTSTRAP='
       - name: Prepare download
         shell: bash
         run: |
           mkdir -p output
           cp app/build/outputs/apk/debug/app-debug.apk output/Aula-UAS-debug.apk
           sha256sum output/Aula-UAS-debug.apk > output/Aula-UAS-debug.apk.sha256
-      - name: Publish current APK in repository
+      - name: Prepare persistent release signing
+        if: env.HAS_RELEASE_SIGNING == 'true'
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/aula-uas-release.jks"
+          test -s "$RUNNER_TEMP/aula-uas-release.jks"
+      - name: Build release APK with persistent signature
+        if: env.HAS_RELEASE_SIGNING == 'true'
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/aula-uas-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: gradle --no-daemon :app:assembleRelease
+      - name: Publish persistently signed APK in repository
+        if: env.HAS_RELEASE_SIGNING == 'true'
         shell: bash
         run: |
-          cp output/Aula-UAS-debug.apk Aula-UAS.apk
+          cp app/build/outputs/apk/release/app-release.apk Aula-UAS.apk
           sha256sum Aula-UAS.apk > Aula-UAS.apk.sha256
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -61,6 +93,9 @@ jobs:
             git commit -m "Update downloadable APK"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
+      - name: Preserve current public APK when signing is unavailable
+        if: env.HAS_RELEASE_SIGNING != 'true'
+        run: echo "Debug validation completed. Aula-UAS.apk was not replaced because persistent release-signing secrets are not configured."
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
@@ -68,5 +103,13 @@ jobs:
           path: |
             output/Aula-UAS-debug.apk
             output/Aula-UAS-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload signed release APK
+        if: env.HAS_RELEASE_SIGNING == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aula-UAS-release-APK
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30

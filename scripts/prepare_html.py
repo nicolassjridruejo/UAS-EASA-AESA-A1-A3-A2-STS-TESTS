@@ -3,6 +3,9 @@ from pathlib import Path
 import base64
 import lzma
 import urllib.request
+import json
+from pypdf import PdfReader
+from io import BytesIO
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "index.source.xz.b64"
@@ -43,11 +46,46 @@ def main():
         render = ROOT / "app/src/main/assets" / asset_path
         if not render.exists() or render.stat().st_size < 10_000:
             raise RuntimeError(f"Falta el render {render_id}: {asset_path}")
+    for marker in (
+        'window.UAS_ASSISTANT_BOOTSTRAP=',
+        '<script src="/assistant/uas-assistant.js"></script>',
+        '<script src="/assistant/uas-assistant-adapter.js"></script>',
+        'Ver fuente, ubicación y pasaje',
+    ):
+        if marker not in html:
+            raise RuntimeError(f"El HTML fuente no contiene la integración requerida: {marker}")
+    for asset_path in (
+        "assistant/uas-assistant.js",
+        "assistant/uas-assistant-adapter.js",
+        "assistant/uas-assistant.css",
+        "assistant/assets/idle.webp",
+        "assistant/assets/scan.webp",
+        "assistant/assets/explain.webp",
+        "assistant/assets/celebrate.webp",
+    ):
+        asset = ROOT / "app/src/main/assets" / asset_path
+        if not asset.exists() or asset.stat().st_size < 1_000:
+            raise RuntimeError(f"Falta un recurso del asistente: {asset_path}")
     embeds = []
+    manuals = {}
     for pdf_id, url in PDFS.items():
         print(f"Descargando {pdf_id}...")
-        encoded_pdf = base64.b64encode(download(url)).decode("ascii")
+        pdf = download(url)
+        encoded_pdf = base64.b64encode(pdf).decode("ascii")
         embeds.append(f'<script type="application/octet-stream" id="pdf-{pdf_id}">{encoded_pdf}</script>')
+        reader = PdfReader(BytesIO(pdf))
+        pages = []
+        for page in reader.pages:
+            text = (page.extract_text() or "").replace("\x00", "").strip()
+            pages.append(text)
+        manuals[pdf_id] = {"title": None, "pages": pages}
+    marker = 'const MANUALS='
+    start = html.index(marker) + len(marker)
+    end = html.index(';\n', start)
+    original = json.loads(html[start:end])
+    for key, item in manuals.items():
+        item["title"] = original[key]["title"]
+    html = html[:start] + json.dumps(manuals, ensure_ascii=False, separators=(",", ":")) + html[end:]
     if "</body>" not in html:
         raise RuntimeError("HTML fuente no contiene </body>")
     html = html.replace("</body>", "\n".join(embeds) + "\n</body>", 1)

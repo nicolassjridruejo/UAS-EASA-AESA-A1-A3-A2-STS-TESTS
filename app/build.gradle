@@ -2,6 +2,8 @@ plugins {
     id 'com.android.application'
 }
 
+def releaseKeystorePath = System.getenv('ANDROID_KEYSTORE_PATH')
+
 android {
     namespace 'com.aulauas.hangar'
     compileSdk 35
@@ -10,13 +12,25 @@ android {
         applicationId 'com.aulauas.hangar'
         minSdk 29
         targetSdk 35
-        versionCode 6
-        versionName '6.0'
+        versionCode 7
+        versionName '7.0'
+    }
+
+    signingConfigs {
+        if (releaseKeystorePath) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv('ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ANDROID_KEY_PASSWORD')
+            }
+        }
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            if (releaseKeystorePath) signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
