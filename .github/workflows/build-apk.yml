@@ -93,19 +93,9 @@ jobs:
             git commit -m "Update downloadable APK"
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-      - name: Publish latest debug APK in repository (one-time refresh)
+      - name: Preserve current public APK when signing is unavailable
         if: env.HAS_RELEASE_SIGNING != 'true'
-        shell: bash
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Aula-UAS.apk
-          sha256sum Aula-UAS.apk > Aula-UAS.apk.sha256
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add Aula-UAS.apk Aula-UAS.apk.sha256
-          if ! git diff --cached --quiet; then
-            git commit -m "Update downloadable APK to latest build"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
+        run: echo "Debug validation completed. Aula-UAS.apk was not replaced because persistent release-signing secrets are not configured."
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
