@@ -1,0 +1,60 @@
+name: Build Aula UAS APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'index.source.xz.b64'
+      - 'app/**'
+      - 'scripts/prepare_html.py'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/build-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    name: Compile debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMANAGER" ]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Rebuild offline HTML with AESA manuals
+        run: python3 scripts/prepare_html.py
+      - name: Build APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Prepare download
+        shell: bash
+        run: |
+          mkdir -p output
+          cp app/build/outputs/apk/debug/app-debug.apk output/Aula-UAS-debug.apk
+          sha256sum output/Aula-UAS-debug.apk > output/Aula-UAS-debug.apk.sha256
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aula-UAS-APK
+          path: |
+            output/Aula-UAS-debug.apk
+            output/Aula-UAS-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
