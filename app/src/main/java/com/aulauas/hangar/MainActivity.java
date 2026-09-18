@@ -139,7 +139,15 @@ public class MainActivity extends Activity {
     }
 
     @Override @SuppressWarnings("deprecation") public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) webView.goBack(); else super.onBackPressed();
+        if (webView == null) { super.onBackPressed(); return; }
+        webView.evaluateJavascript(
+            "(function(){try{return !!(window.AulaUASHandleBack&&window.AulaUASHandleBack());}catch(e){return false;}})();",
+            handled -> {
+                if ("true".equals(handled)) return;
+                if (webView.canGoBack()) webView.goBack();
+                else MainActivity.super.onBackPressed();
+            }
+        );
     }
 
     private final class AndroidBridge {
